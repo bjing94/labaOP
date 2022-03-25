@@ -11,24 +11,15 @@
 #include <fcntl.h>
 #include "file-info.c"
 
-void dirToArchive(char *dirPath, char *archPath, int level, char *basePath)
+void dirToArchive(char *dirPath, char *archPath, char *basePath)
 {
 	struct stat *finfo = malloc(800); // file info
-	int outDescriptor = open(archPath, O_CREAT | O_RDWR | O_APPEND, S_IRWXU);
-	if (outDescriptor == -1)
-	{
-		printf("File didn't open!\n");
-	}
-	// FILE *out = fopen(archPath, "a");
-	//  fseek(out, 0, SEEK_SET);
 	char buff[256];
 	char path[32256];
-	// fputs(basename(dirPath), out);
 	if (isDirectory(dirPath))
 	{
 		struct dirent *de; // iterator through folder
 		DIR *dr = opendir(dirPath);
-		// fclose(out);
 
 		while ((de = readdir(dr)) != NULL)
 		{
@@ -39,13 +30,18 @@ void dirToArchive(char *dirPath, char *archPath, int level, char *basePath)
 				strcat(path, "/");
 				strcat(path, de->d_name);
 				printf("Inspecting file: %s\n", path);
-				dirToArchive(path, archPath, level + 1, basePath);
+				dirToArchive(path, archPath, basePath);
 			}
-			// closedir(dr);
 		}
+		closedir(dr);
 	}
 	else
 	{
+		int outDescriptor = open(archPath, O_CREAT | O_RDWR | O_APPEND, S_IRWXU);
+		if (outDescriptor == -1)
+		{
+			printf("File didn't open!\n");
+		}
 		int inDescriptor = open(dirPath, O_RDWR);
 		long size = getFileSize(dirPath);
 		char sizeStr[255];
@@ -55,11 +51,12 @@ void dirToArchive(char *dirPath, char *archPath, int level, char *basePath)
 		printf("File name: %s\n", fileName);
 		char *dateModified = getDateModified(dirPath);
 		char *filePermissions = getFilePermissions(dirPath);
-		// char *fileContent = getFileContent(dirPath, inDescriptor);
 
 		printf("File size is %li bytes\n", size);
 		printf("Date modified: %s\n", dateModified);
 		printf("File permissions: %s(%ld)\n", filePermissions, strlen(filePermissions));
+		printf("base path: %s\n", basePath);
+		printf("DIR path: %s\n", dirPath);
 		for (int i = strlen(basePath); i < strlen(dirPath); i++)
 		{
 			write(outDescriptor, &dirPath[i], 1);
@@ -78,8 +75,8 @@ void dirToArchive(char *dirPath, char *archPath, int level, char *basePath)
 		write(outDescriptor, filePermissions, 3);
 		write(outDescriptor, "!", 1);
 		write(outDescriptor, "\n", 1);
-		// close(outDescriptor);
-		// fclose(out);
+		close(outDescriptor);
+		close(inDescriptor);
 	}
 	free(finfo);
 }
@@ -196,33 +193,66 @@ void archiveToDir(char *dirPath, char *archPath)
 	}
 }
 
+void throw(char *msg)
+{
+	printf("%s\n", msg);
+}
+
 int main(int argc, char *argv[])
 {
 	FILE *fp;
 
 	printf("Program: %s\n", argv[0]);
 
-	char *pathToFile = "";
+	char *archMode = "";
+	char *pathToDirectory = "";
 	char *pathToArchive = "";
 	for (int i = 1; i < argc; i++)
 	{
 		if (strcmp(argv[i], "-d") == 0)
 		{
-			pathToFile = argv[i + 1];
+			pathToDirectory = argv[i + 1];
 		}
 
-		if (strcmp(argv[i], "-o") == 0)
+		if (strcmp(argv[i], "-a") == 0)
 		{
 			pathToArchive = argv[i + 1];
 		}
+
+		if (strcmp(argv[i], "-unarch") == 0)
+		{
+			archMode = argv[i];
+		}
+
+		if (strcmp(argv[i], "-arch") == 0)
+		{
+			archMode = argv[i];
+		}
 	}
-	char *finalPath = strcat(pathToArchive, "lab1.txt");
-	printf("Path to file: %s\n", pathToFile);
-	printf("Path to archive: %s\n", finalPath);
-	int len = 0;
-	int *sz = &len;
-	remove(finalPath);
-	dirToArchive(pathToFile, finalPath, 0, pathToFile);
-	archiveToDir("/home/bjing/output", finalPath);
+	if (strcmp(pathToDirectory, "") == 0)
+	{
+		throw("Specify directory location");
+		return 0;
+	}
+	if (strcmp(pathToArchive, "") == 0)
+	{
+		throw("Specify archive location");
+		return 0;
+	}
+	if (strcmp(archMode, "-unarch") == 0)
+	{
+		archiveToDir(pathToDirectory, pathToArchive);
+	}
+	else if (strcmp(archMode, "-arch") == 0)
+	{
+		char *finalPath = strcat(pathToArchive, "lab1.arch");
+		remove(finalPath);
+		dirToArchive(pathToDirectory, finalPath, pathToDirectory);
+	}
+	else
+	{
+		throw("Specify mode!\n");
+		return 0;
+	}
 	return 0;
 }
